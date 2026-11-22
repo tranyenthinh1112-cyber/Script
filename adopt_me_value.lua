@@ -1,6 +1,6 @@
 --!nocheck
 --!nolint
--- Adopt Me Trade Value v3.0
+-- Adopt Me Trade Value v3.1
 -- Chi hien khi dang mo man hinh TRADE: tong value 2 ben + loi/lo, ghi o tren cung man hinh
 -- Gia tri lay tu bang gia Elvebredd (qua ban sao JSON cong khai cap nhat 15 phut/lan)
 
@@ -455,7 +455,7 @@ local function dumpTable(t, depth, out, seen)
     end
 end
 function AM.copyLog()
-    local out = { "AMValue v3.0 | so mon: " .. #ITEMS .. " | ten game: " .. DB_STATE .. " | trade: " .. tostring(TRADE ~= nil) }
+    local out = { "AMValue v3.1 | so mon: " .. #ITEMS .. " | ten game: " .. DB_STATE .. " | trade: " .. tostring(TRADE ~= nil) }
     table.insert(out, "Vi tri: " .. tostring(AM.anchorInfo))
     for k, v in pairs(UNKNOWN) do table.insert(out, "KHONG TIM THAY: " .. k .. " -> " .. tostring(v)) end
     if TRADE then dumpTable(TRADE, 0, out, {}) else
@@ -715,7 +715,10 @@ local function update()
         b.BackgroundColor3 = grey:Lerp(r > 0 and Color3.fromRGB(0, 210, 70) or Color3.fromRGB(230, 30, 30), k)
     end
     -- chi ghi 1 so: value ben kia (mau nen cho biet loi/lo so voi ben minh)
-    b.Text = fmt(thV) .. ((myU + thU > 0) and "?" or "")
+    -- so chenh lech co dau: loi +X, lo -X
+    local dstr = ""
+    if math.abs(diff) >= 0.001 then dstr = "  " .. (diff > 0 and "+" or "-") .. fmt(math.abs(diff)) end
+    b.Text = fmt(thV) .. dstr .. ((myU + thU > 0) and "?" or "")
     setMood(b, (math.abs(r) < 0.02) and 0 or r)
     local cb = b:FindFirstChild("AMValueCopy")
     if cb then cb.Visible = (myU + thU > 0) end -- nut Copy chi hien khi co mon chua co gia
@@ -745,4 +748,4 @@ task.spawn(function()
         task.wait(0.5)
     end
 end)
-print("[AMValue] v3.0 dang chay - mo man hinh trade de xem tong value")
+print("[AMValue] v3.1 dang chay - mo man hinh trade de xem tong value")
