@@ -1,6 +1,6 @@
 --!nocheck
 --!nolint
--- Adopt Me Trade Value v2.9
+-- Adopt Me Trade Value v3.0
 -- Chi hien khi dang mo man hinh TRADE: tong value 2 ben + loi/lo, ghi o tren cung man hinh
 -- Gia tri lay tu bang gia Elvebredd (qua ban sao JSON cong khai cap nhat 15 phut/lan)
 
@@ -39,7 +39,7 @@ for _, root in ipairs({ uiParent(), LocalPlayer:FindFirstChild("PlayerGui") }) d
     end
 end
 
-local AM = { alive = true, conns = {} }
+local AM = { alive = true, conns = {}, petTags = true }
 genv.AMValue = AM
 
 ---------------------------------------------------------------- TAI DU LIEU
@@ -455,7 +455,7 @@ local function dumpTable(t, depth, out, seen)
     end
 end
 function AM.copyLog()
-    local out = { "AMValue v2.9 | so mon: " .. #ITEMS .. " | ten game: " .. DB_STATE .. " | trade: " .. tostring(TRADE ~= nil) }
+    local out = { "AMValue v3.0 | so mon: " .. #ITEMS .. " | ten game: " .. DB_STATE .. " | trade: " .. tostring(TRADE ~= nil) }
     table.insert(out, "Vi tri: " .. tostring(AM.anchorInfo))
     for k, v in pairs(UNKNOWN) do table.insert(out, "KHONG TIM THAY: " .. k .. " -> " .. tostring(v)) end
     if TRADE then dumpTable(TRADE, 0, out, {}) else
@@ -476,6 +476,7 @@ function AM.destroy()
     for _, c in ipairs(AM.conns) do pcall(function() c:Disconnect() end) end
     pcall(function() gui:Destroy() end)
     pcall(function() if box then box:Destroy() end end)
+    for _, bb in pairs(petTag) do pcall(function() bb:Destroy() end) end
     if genv.AMValue == AM then genv.AMValue = nil end
 end
 
@@ -559,6 +560,92 @@ local function placeBox(g, accept)
     return b
 end
 
+---------------------------------------------------------------- NHAN VALUE TREN DAU PET (luc dang trade / xem pet)
+local petTag = {}
+local function headPart(m)
+    return m:FindFirstChild("Head") or m:FindFirstChild("head")
+        or m.PrimaryPart or m:FindFirstChildWhichIsA("BasePart")
+end
+local function hasNeon(m)
+    for _, d in ipairs(m:GetDescendants()) do
+        if d:IsA("BasePart") and d.Material == Enum.Material.Neon then return true end
+    end
+    return false
+end
+-- tim ten loai cua 1 mo hinh pet (ten mo hinh / thuoc tinh / StringValue con)
+local function petItem(m)
+    local cands = { m.Name }
+    pcall(function()
+        for k, v in pairs(m:GetAttributes()) do
+            if type(v) == "string" then table.insert(cands, v) end
+            if type(k) == "string" then table.insert(cands, k) end
+        end
+    end)
+    for _, d in ipairs(m:GetChildren()) do
+        if d:IsA("StringValue") then table.insert(cands, d.Value) table.insert(cands, d.Name) end
+    end
+    for _, c in ipairs(cands) do
+        if type(c) == "string" and #c >= 3 then
+            local it = resolveKind(c)
+            if it and isPet(it) then return it end
+        end
+    end
+end
+-- gom cac mo hinh pet dang hien ra (chi quet noi nong, khong quet ca workspace)
+local function collectPetModels()
+    local out = {}
+    local char = LocalPlayer.Character
+    local function take(m) if m:IsA("Model") and m ~= char then out[#out + 1] = m end end
+    local pets = workspace:FindFirstChild("Pets")
+    if pets then for _, m in ipairs(pets:GetChildren()) do take(m) end end
+    for _, m in ipairs(workspace:GetChildren()) do take(m) end
+    local cam = workspace.CurrentCamera
+    if cam then for _, m in ipairs(cam:GetChildren()) do take(m) end end
+    return out
+end
+local function clearPetTags()
+    for m, bb in pairs(petTag) do pcall(function() bb:Destroy() end) petTag[m] = nil end
+end
+local function updatePets(tradeOpen)
+    if not (AM.petTags and tradeOpen and #ITEMS > 0) then clearPetTags() return end
+    local seen = {}
+    for _, m in ipairs(collectPetModels()) do
+        local part = headPart(m)
+        local it = part and petItem(m)
+        if it then
+            seen[m] = true
+            local neon = hasNeon(m)
+            local age = neon and "neon" or nil
+            local bb = petTag[m]
+            if not bb or not bb.Parent then
+                bb = Instance.new("BillboardGui")
+                bb.Name = "AMValuePet"
+                bb.Size = UDim2.new(0, 170, 0, 20)
+                bb.StudsOffset = Vector3.new(0, 2.6, 0)
+                bb.AlwaysOnTop = true
+                bb.MaxDistance = 80
+                local t = Instance.new("TextLabel")
+                t.Size = UDim2.new(1, 0, 1, 0)
+                t.BackgroundColor3 = Color3.fromRGB(20, 20, 28)
+                t.BackgroundTransparency = 0.3
+                t.TextColor3 = Color3.fromRGB(255, 230, 120)
+                t.Font = Enum.Font.GothamBold
+                t.TextScaled = true
+                t.Parent = bb
+                Instance.new("UICorner", t).CornerRadius = UDim.new(0, 6)
+                local lim = Instance.new("UITextSizeConstraint", t) lim.MaxTextSize = 15
+                bb.Parent = gui
+                petTag[m] = bb
+            end
+            bb.Adornee = part
+            bb.TextLabel.Text = it.name .. ": " .. shortText(it, age, nil)
+        end
+    end
+    for m, bb in pairs(petTag) do
+        if not seen[m] then pcall(function() bb:Destroy() end) petTag[m] = nil end
+    end
+end
+
 -- cau "tho" theo muc loi/lo (chu co dau viet bang ma \u{..} de file van la ASCII, Roblox hien dung dau) (r = chenh lech / value lon hon, tu -1 den 1)
 local MOODS = {
     { 0.5,  "NGON VCL, CH\u{1ED0}T L\u{1EB8} \u{110}I",        Color3.fromRGB(0, 255, 90) },
@@ -581,6 +668,7 @@ end
 local wasOpen = false
 local function update()
     local g, accept = tradeWindowOpen()
+    updatePets(g ~= nil)
     if not g then
         if wasOpen then TRADE = nil end -- dong trade -> xoa du lieu cu
         wasOpen = false
@@ -657,4 +745,4 @@ task.spawn(function()
         task.wait(0.5)
     end
 end)
-print("[AMValue] v2.9 dang chay - mo man hinh trade de xem tong value")
+print("[AMValue] v3.0 dang chay - mo man hinh trade de xem tong value")
